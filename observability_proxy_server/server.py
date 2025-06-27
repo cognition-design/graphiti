@@ -79,7 +79,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/models", dependencies=[Depends(get_api_key)])
+# @app.get("/models", dependencies=[Depends(get_api_key)])
+@app.get("/models")
 async def get_models():
     """Handle requests to /models endpoint."""
     print("Handling /models request")
@@ -219,7 +220,8 @@ async def proxy_chat_completion(
             print(f"Unexpected error: {e}")
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-@app.post("/chat/completions", dependencies=[Depends(get_api_key)])
+# @app.post("/chat/completions", dependencies=[Depends(get_api_key)])
+@app.post("/chat/completions")
 async def chat_completions(request: Request):
     """Handle requests to /chat/completions endpoint."""
     print("Handling /chat/completions request")
@@ -273,7 +275,8 @@ async def chat_completions(request: Request):
         print(f"Error in chat_completions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/health", dependencies=[Depends(get_api_key)])
+# @app.get("/health", dependencies=[Depends(get_api_key)])
+@app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "openrouter-proxy"}
