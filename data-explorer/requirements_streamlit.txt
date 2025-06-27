@@ -1,0 +1,70 @@
+# Graphiti Knowledge Graph Explorer - Requirements
+# Version: 1.0.0
+# Last Updated: 2025-06-09
+
+# Core Dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.15.0
+networkx>=3.1
+neo4j>=5.12.0
+streamlit-agraph>=0.0.8
+
+# Feature Implementation Status:
+
+# ✅ COMPLETED FEATURES:
+# - Database connection management with error handling
+# - Overview dashboard with real-time metrics
+# - Entity search with full-text capabilities
+# - Interactive graph visualization (NetworkX + Plotly)
+# - Episode browser for conversational memory (FIXED: now uses correct "Episodic" label)
+# - Relationship analysis and exploration
+# - Responsive UI with custom CSS styling
+# - Comprehensive error handling and logging
+# - Multi-language content support (RU/UA/EN)
+# - Empty state handling with user guidance
+# - Enhanced data structure visualization with node/relationship type explanations
+# - Type-specific search filtering (Entity/Episodic/Community/All Types)
+# - Color-coded entity display with appropriate icons
+# - Content preview/full view toggle for long text
+# - Detailed relationship viewer with direction and properties
+# - Smart search suggestions with autocomplete (NEW!)
+#   * Pre-populated entity names, types, and sources from database
+#   * Real-time autocomplete hints while typing
+#   * Categorized suggestion buttons (People, Types, Sources, Topics)
+#   * Alternative search suggestions when no results found
+#   * Common terms extraction from entity summaries
+
+# 🚧 IN PROGRESS:
+# - Real-time bug fixes and performance optimization
+# - UI polish and user experience improvements
+
+# PLANNED FEATURES:
+# - Advanced entity filtering by type and properties
+# - Timeline view for episodic data
+# - Community detection and clustering
+# - Export functionality (CSV, JSON, GraphML)
+# - Saved search queries and bookmarks
+# - Real-time data refresh and auto-update
+# - Advanced graph layout algorithms
+# - Entity similarity scoring
+# - Batch entity operations
+# - API endpoint integration
+# - Mobile-optimized responsive design
+# - Collaborative features (shared views)
+# - Performance monitoring dashboard
+# - Custom visualization themes
+# - Webhook integration for real-time updates
+
+# DEVELOPMENT TOOLS:
+# - Comprehensive logging system
+# - Error tracking and reporting
+# - Performance profiling capabilities
+# - Database schema validation
+# - Automated testing framework (planned)
+
+# INTEGRATION TARGETS:
+# - Claude Desktop MCP server
+# - Graphiti knowledge graph system
+# - Neo4j database (5.22+)
+# - Docker containerization support
