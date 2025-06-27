@@ -14,51 +14,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import typing
+import logging
+from typing import ClassVar
 
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
 from .config import DEFAULT_MAX_TOKENS, LLMConfig
 from .openai_base_client import BaseOpenAIClient
 
+logger = logging.getLogger(__name__)
 
-class OpenAIClient(BaseOpenAIClient):
-    """
-    OpenAIClient is a client class for interacting with OpenAI's language models.
 
-    This class extends the BaseOpenAIClient and provides OpenAI-specific implementation
-    for creating completions.
+class AzureOpenAILLMClient(BaseOpenAIClient):
+    """Wrapper class for AsyncAzureOpenAI that implements the LLMClient interface."""
 
-    Attributes:
-        client (AsyncOpenAI): The OpenAI client used to interact with the API.
-    """
+    # Class-level constants
+    MAX_RETRIES: ClassVar[int] = 2
 
     def __init__(
         self,
+        azure_client: AsyncAzureOpenAI,
         config: LLMConfig | None = None,
-        cache: bool = False,
-        client: typing.Any = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
     ):
-        """
-        Initialize the OpenAIClient with the provided configuration, cache setting, and client.
-
-        Args:
-            config (LLMConfig | None): The configuration for the LLM client, including API key, model, base URL, temperature, and max tokens.
-            cache (bool): Whether to use caching for responses. Defaults to False.
-            client (Any | None): An optional async client instance to use. If not provided, a new AsyncOpenAI client is created.
-        """
-        super().__init__(config, cache, max_tokens)
-
-        if config is None:
-            config = LLMConfig()
-
-        if client is None:
-            self.client = AsyncOpenAI(api_key=config.api_key, base_url=config.base_url)
-        else:
-            self.client = client
+        super().__init__(config, cache=False, max_tokens=max_tokens)
+        self.client = azure_client
 
     async def _create_structured_completion(
         self,
@@ -68,7 +50,7 @@ class OpenAIClient(BaseOpenAIClient):
         max_tokens: int,
         response_model: type[BaseModel],
     ):
-        """Create a structured completion using OpenAI's beta parse API."""
+        """Create a structured completion using Azure OpenAI's beta parse API."""
         return await self.client.beta.chat.completions.parse(
             model=model,
             messages=messages,
@@ -85,7 +67,7 @@ class OpenAIClient(BaseOpenAIClient):
         max_tokens: int,
         response_model: type[BaseModel] | None = None,
     ):
-        """Create a regular completion with JSON format."""
+        """Create a regular completion with JSON format using Azure OpenAI."""
         return await self.client.chat.completions.create(
             model=model,
             messages=messages,
