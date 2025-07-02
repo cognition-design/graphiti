@@ -17,6 +17,7 @@ limitations under the License.
 import logging
 import os
 import sys
+import unittest
 from datetime import datetime, timezone
 
 import pytest
@@ -26,9 +27,15 @@ from graphiti_core.edges import EntityEdge, EpisodicEdge
 from graphiti_core.graphiti import Graphiti
 from graphiti_core.helpers import semaphore_gather
 from graphiti_core.nodes import EntityNode, EpisodicNode
-from graphiti_core.search.search_filters import ComparisonOperator, DateFilter, SearchFilters
 from graphiti_core.search.search_helpers import search_results_to_context_string
-from graphiti_core.utils.datetime_utils import utc_now
+
+try:
+    from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+    HAS_FALKORDB = True
+except ImportError:
+    FalkorDriver = None
+    HAS_FALKORDB = False
 
 pytestmark = pytest.mark.integration
 
@@ -36,9 +43,10 @@ pytest_plugins = ('pytest_asyncio',)
 
 load_dotenv()
 
-NEO4J_URI = os.getenv('NEO4J_URI')
-NEO4j_USER = os.getenv('NEO4J_USER')
-NEO4j_PASSWORD = os.getenv('NEO4J_PASSWORD')
+FALKORDB_HOST = os.getenv('FALKORDB_HOST', 'localhost')
+FALKORDB_PORT = os.getenv('FALKORDB_PORT', '6379')
+FALKORDB_USER = os.getenv('FALKORDB_USER', None)
+FALKORDB_PASSWORD = os.getenv('FALKORDB_PASSWORD', None)
 
 
 def setup_logging():
@@ -63,14 +71,17 @@ def setup_logging():
 
 
 @pytest.mark.asyncio
-async def test_graphiti_init():
+@unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+async def test_graphiti_falkordb_init():
     logger = setup_logging()
-    graphiti = Graphiti(NEO4J_URI, NEO4j_USER, NEO4j_PASSWORD)
-    search_filter = SearchFilters(
-        created_at=[[DateFilter(date=utc_now(), comparison_operator=ComparisonOperator.less_than)]]
+
+    falkor_driver = FalkorDriver(
+        host=FALKORDB_HOST, port=FALKORDB_PORT, username=FALKORDB_USER, password=FALKORDB_PASSWORD
     )
 
-    results = await graphiti.search_(query='Who is Tania?', search_filter=search_filter)
+    graphiti = Graphiti(graph_driver=falkor_driver)
+
+    results = await graphiti.search_(query='Who is the user?')
 
     pretty_results = search_results_to_context_string(results)
 
@@ -80,8 +91,13 @@ async def test_graphiti_init():
 
 
 @pytest.mark.asyncio
-async def test_graph_integration():
-    client = Graphiti(NEO4J_URI, NEO4j_USER, NEO4j_PASSWORD)
+@unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+async def test_graph_falkordb_integration():
+    falkor_driver = FalkorDriver(
+        host=FALKORDB_HOST, port=FALKORDB_PORT, username=FALKORDB_USER, password=FALKORDB_PASSWORD
+    )
+
+    client = Graphiti(graph_driver=falkor_driver)
     embedder = client.embedder
     driver = client.driver
 
@@ -144,3 +160,5 @@ async def test_graph_integration():
     # test delete
     await semaphore_gather(*[node.delete(driver) for node in nodes])
     await semaphore_gather(*[edge.delete(driver) for edge in edges])
+
+    await client.close()
