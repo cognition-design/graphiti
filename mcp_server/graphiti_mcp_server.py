@@ -35,7 +35,7 @@ from graphiti_core.search.search_config_recipes import (
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 DEFAULT_LLM_MODEL = 'gpt-4.1-mini'
