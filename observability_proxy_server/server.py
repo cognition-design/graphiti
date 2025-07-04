@@ -99,6 +99,33 @@ async def get_models():
     print("Handling /models request")
     return {"message": "Success: /models path hit"}
 
+def normalize_model_name(model_id: str) -> str:
+    """
+    Normalizes the model name to the OpenRouter standard.
+    - Adds provider prefix (e.g., 'anthropic/', 'openai/').
+    - Simplifies model names (e.g., 'claude-3-haiku-20240307' -> 'claude-3-haiku').
+    """
+    if "/" in model_id:
+        # Already has a provider, assume it's correct
+        return model_id
+
+    # Handle Anthropic models
+    if "claude" in model_id:
+        parts = model_id.split('-')
+        if len(parts) > 3:
+            # e.g., claude-3-haiku-20240307 -> claude-3-haiku
+            simplified_name = "-".join(parts[:3])
+            return f"anthropic/{simplified_name}"
+        return f"anthropic/{model_id}"
+
+    # Handle OpenAI models
+    if "gpt" in model_id:
+        return f"openai/{model_id}"
+
+    # Return original if no specific rule matches
+    return model_id
+
+
 async def proxy_chat_completion(
     request_data: Dict[str, Any],
     session_id: Optional[str] = None
@@ -106,12 +133,21 @@ async def proxy_chat_completion(
     """
     Proxy chat completion request to OpenRouter with Langfuse observability.
     """
+    # Normalize model name before processing
+    original_model = None
+    if "model" in request_data:
+        original_model = request_data["model"]
+        normalized_model = normalize_model_name(original_model)
+        request_data["model"] = normalized_model
+        print(f"Normalized model name from '{original_model}' to '{normalized_model}'")
+
     trace = langfuse.trace(
         name="chat-completion-proxy",
         session_id=session_id,
         metadata={
             "streaming": request_data.get("stream", False),
             "model": request_data.get("model"),
+            "original_model": original_model,
         }
     )
     generation = trace.generation(
