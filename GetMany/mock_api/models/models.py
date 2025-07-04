@@ -33,11 +33,11 @@ class Proposal(BaseModel):
     status: str
 
 class Keywords(BaseModel):
-    active: bool
-    keywords: List[str]
-    matchDescription: bool
-    matchSkills: bool
-    matchTitle: bool
+    active: Optional[bool] = None
+    keywords: List[str] = Field(default_factory=list)
+    matchDescription: Optional[bool] = None
+    matchSkills: Optional[bool] = None
+    matchTitle: Optional[bool] = None
 
 class AgencyStats(BaseModel):
     sent: int
@@ -46,60 +46,50 @@ class AgencyStats(BaseModel):
     hired: int
     conversionRate: Optional[float] = None
 
-class DateRangeParams(BaseModel):
-    from_date: datetime.date = Field(default_factory=lambda: datetime.date.today() - datetime.timedelta(days=30))
-    to_date: datetime.date = Field(default_factory=datetime.date.today)
-    include: Optional[str] = None
-
-class JobFeedParams(BaseModel):
-    pageCursor: Optional[str] = None
-    pageSize: int = 10
-    since: Optional[datetime.datetime] = None
-
 class BudgetPrefs(BaseModel):
-    allowUnspecifiedBudget: bool
+    allowUnspecifiedBudget: Optional[bool] = None
     avgHourlyRate: Optional[dict] = None
     hourlyRate: Optional[dict] = None
     connectsPrice: Optional[dict] = None
     fixedPrice: Optional[dict] = None
-    jobDurations: List[str]
-    hourlyWorkloads: List[str]
-    noAvgHourlyRatePaid: bool
-    noHireRate: bool
-    minClientHireRate: int
-    onlyContractToHire: bool
+    jobDurations: List[str] = Field(default_factory=list)
+    hourlyWorkloads: List[str] = Field(default_factory=list)
+    noAvgHourlyRatePaid: Optional[bool] = None
+    noHireRate: Optional[bool] = None
+    minClientHireRate: Optional[int] = None
+    onlyContractToHire: Optional[bool] = None
 
 class ClientPrefs(BaseModel):
-    companySizeRange: List[str]
-    descriptionLanguage: dict
-    excludeCountryCodes: List[dict]
-    excludeIndustry: List[str]
-    hireHistory: List[str]
-    includeCountryCodes: List[dict]
-    includeIndustry: List[str]
-    includeWithNoFeedback: bool
-    maxTotalSpent: int
-    minFeedbackScore: str
-    minTotalSpent: int
-    paymentMethodVerified: bool
-    phoneNumberVerified: bool
-    timezones: List[str]
+    companySizeRange: List[str] = Field(default_factory=list)
+    descriptionLanguage: Optional[dict] = None
+    excludeCountryCodes: List[dict] = Field(default_factory=list)
+    excludeIndustry: List[str] = Field(default_factory=list)
+    hireHistory: List[str] = Field(default_factory=list)
+    includeCountryCodes: List[dict] = Field(default_factory=list)
+    includeIndustry: List[str] = Field(default_factory=list)
+    includeWithNoFeedback: Optional[bool] = None
+    maxTotalSpent: Optional[int] = None
+    minFeedbackScore: Optional[str] = None
+    minTotalSpent: Optional[int] = None
+    paymentMethodVerified: Optional[bool] = None
+    phoneNumberVerified: Optional[bool] = None
+    timezones: List[str] = Field(default_factory=list)
 
 class VendorPrefs(BaseModel):
-    englishProficiency: str
-    excludeWithQuestions: bool
-    experienceLevel: List[str]
-    includeCountryCodes: List[dict]
-    includeFeatured: bool
-    includeWithoutCountryPreference: bool
-    languages: List[str]
-    minGetmanyJobScore: float
-    type: List[str]
+    englishProficiency: Optional[str] = None
+    excludeWithQuestions: Optional[bool] = None
+    experienceLevel: List[str] = Field(default_factory=list)
+    includeCountryCodes: List[dict] = Field(default_factory=list)
+    includeFeatured: Optional[bool] = None
+    includeWithoutCountryPreference: Optional[bool] = None
+    languages: List[str] = Field(default_factory=list)
+    minGetmanyJobScore: Optional[float] = None
+    type: List[str] = Field(default_factory=list)
 
 class SearchConfig(BaseModel):
-    jobCategories: List[str]
-    excludeKeywords: Keywords
-    includeKeywords: Keywords
+    jobCategories: List[str] = Field(default_factory=list)
+    excludeKeywords: Optional[Keywords] = None
+    includeKeywords: Optional[Keywords] = None
     budgetPrefs: Optional[BudgetPrefs] = None
     client: Optional[ClientPrefs] = None
     vendor: Optional[VendorPrefs] = None

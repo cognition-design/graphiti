@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from typing import Optional
 import datetime
 import uuid
@@ -6,9 +6,7 @@ import uuid
 from models.models import (
     SearchConfig,
     CreateJobSearchRequest,
-    AgencyStats,
-    DateRangeParams,
-    JobFeedParams
+    AgencyStats
 )
 from data import mock_data
 
@@ -19,19 +17,22 @@ def get_agency():
     return mock_data.agency_details
 
 @router.get("/agency/stats", response_model=dict)
-def get_agency_stats(params: DateRangeParams = Depends()):
-    stats_data = mock_data.agency_stats.copy()
-    stats = AgencyStats(**stats_data)
+def get_agency_stats(from_date: Optional[datetime.date] = None, to_date: Optional[datetime.date] = None, include: Optional[str] = None):
+    if from_date is None:
+        from_date = datetime.date.today() - datetime.timedelta(days=30)
+    if to_date is None:
+        to_date = datetime.date.today()
 
-    if params.include == "conversion_rate" and stats.sent > 0:
+    stats = AgencyStats(**mock_data.agency_stats)
+
+    if include == "conversion_rate" and stats.sent > 0:
         stats.conversionRate = round((stats.hired / stats.sent) * 100, 2)
     
     return {"data": stats.model_dump(exclude_none=True)}
 
 @router.get("/job-searches/{id}/feed", response_model=dict)
-def get_job_searches_by_id_feed(id: str, params: JobFeedParams = Depends()):
+def get_job_searches_by_id_feed(id: str, pageCursor: Optional[str] = None, pageSize: Optional[int] = 10, since: Optional[datetime.datetime] = None):
     """This endpoint mocks the 'Search job candidates' functionality."""
-    # The mock implementation doesn't use the params yet, but the signature is correct.
     return {"data": mock_data.job_candidates}
 
 @router.get("/agency/proposals", response_model=dict)
@@ -55,7 +56,7 @@ def create_job_search(search_request: CreateJobSearchRequest):
 @router.post("/job-searches/sample")
 def get_job_search_sample(search_config: SearchConfig):
     """Mocks getting a sample of jobs for a given search configuration."""
-    sample_jobs = get_job_searches_by_id_feed(id="sample", params=JobFeedParams())
+    sample_jobs = get_job_searches_by_id_feed(id="sample")
     return {
         "count": len(sample_jobs["data"]),
         "data": sample_jobs["data"]
