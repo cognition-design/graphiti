@@ -238,6 +238,61 @@ async def chat_completions(request: Request):
         print(f"Error in chat_completions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/v1/messages")
+async def messages(request: Request):
+    """Handle requests to Anthropic-compatible /v1/messages endpoint."""
+    print("Handling /v1/messages request for Anthropic compatibility")
+    
+    try:
+        request_data = await request.json()
+        print(f"Original received payload for /v1/messages: {json.dumps(request_data, indent=2)}")
+        
+        # For Anthropic, session_id might be in metadata if the client supports it.
+        # n8n often passes a user_id here, which we can use for session tracking.
+        session_id = request_data.get("metadata", {}).get("user_id")
+        if session_id:
+            print(f"Extracted session ID from metadata: {session_id}")
+        
+        is_streaming = request_data.get("stream", False)
+        
+        if is_streaming:
+            print("Streaming request detected. Initiating SSE response.")
+            
+            async def generate_stream():
+                async for chunk in proxy_chat_completion(request_data, session_id):
+                    yield chunk
+            
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Access-Control-Allow-Origin": "*",
+                }
+            )
+        else:
+            print("Non-streaming request detected. Sending full JSON response.")
+            
+            response_content = ""
+            async for chunk in proxy_chat_completion(request_data, session_id):
+                response_content = chunk  # For non-streaming, there's only one chunk
+                break
+            
+            return Response(
+                content=response_content,
+                media_type="application/json",
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in request body")
+    except Exception as e:
+        print(f"Error in /v1/messages endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # @app.get("/health", dependencies=[Depends(get_api_key)])
 @app.get("/health")
 async def health_check():
