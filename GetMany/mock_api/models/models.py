@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import datetime
 
@@ -38,6 +38,23 @@ class Keywords(BaseModel):
     matchDescription: bool
     matchSkills: bool
     matchTitle: bool
+
+class AgencyStats(BaseModel):
+    sent: int
+    viewed: int
+    accepted: int
+    hired: int
+    conversionRate: Optional[float] = None
+
+class DateRangeParams(BaseModel):
+    from_date: datetime.date = Field(default_factory=lambda: datetime.date.today() - datetime.timedelta(days=30))
+    to_date: datetime.date = Field(default_factory=datetime.date.today)
+    include: Optional[str] = None
+
+class JobFeedParams(BaseModel):
+    pageCursor: Optional[str] = None
+    pageSize: int = 10
+    since: Optional[datetime.datetime] = None
 
 class BudgetPrefs(BaseModel):
     allowUnspecifiedBudget: bool
