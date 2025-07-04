@@ -19,7 +19,9 @@ from pydantic import BaseModel
 from langfuse import Langfuse
 from langfuse.decorators import observe
 import uvicorn
+from dotenv import load_dotenv
 
+load_dotenv(override=True)
 
 # Initialize Langfuse client
 langfuse = Langfuse(
@@ -63,11 +65,22 @@ async def get_api_key(api_key: str = Depends(api_key_header)):
         )
     return api_key
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    yield
+    # On shutdown, flush any buffered events
+    print("Shutting down and flushing Langfuse events...")
+    langfuse.flush()
+    print("Langfuse events flushed.")
+
+
 # FastAPI app initialization
 app = FastAPI(
     title="OpenRouter Proxy with Langfuse",
     description="Proxy server for OpenRouter API with Langfuse observability",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -86,7 +99,6 @@ async def get_models():
     print("Handling /models request")
     return {"message": "Success: /models path hit"}
 
-@observe(name="chat_completion_proxy")
 async def proxy_chat_completion(
     request_data: Dict[str, Any],
     session_id: Optional[str] = None
@@ -94,131 +106,82 @@ async def proxy_chat_completion(
     """
     Proxy chat completion request to OpenRouter with Langfuse observability.
     """
-    openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
-    if not openrouter_api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Server configuration error: Missing OPENROUTER_API_KEY environment variable"
-        )
-
-    # Prepare headers for OpenRouter API
-    headers = {
-        "Authorization": f"Bearer {openrouter_api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": os.getenv("HTTP_REFERER", "http://localhost:8000"),
-        "X-Title": os.getenv("X_TITLE", "Graphiti Proxy Server")
-    }
-
-    # Add session tracking if available
-    if session_id:
-        headers["X-Session-Id"] = session_id
-
-    # Remove response_format from the request body as it was used for session tracking
-    filtered_request = {k: v for k, v in request_data.items() if k != "response_format"}
-    
-    print(f"Proxying request to OpenRouter: {json.dumps(filtered_request, indent=2)}")
-    
-    # Log to Langfuse
-    langfuse.generation(
-        name="openrouter_chat_completion",
-        model=filtered_request.get("model", "unknown"),
-        input=filtered_request.get("messages", []),
+    trace = langfuse.trace(
+        name="chat-completion-proxy",
+        session_id=session_id,
         metadata={
-            "session_id": session_id,
-            "stream": filtered_request.get("stream", False),
-            "temperature": filtered_request.get("temperature"),
-            "max_tokens": filtered_request.get("max_tokens"),
+            "streaming": request_data.get("stream", False),
+            "model": request_data.get("model"),
         }
     )
+    generation = trace.generation(
+        name="openrouter-generation",
+        model=request_data.get("model", "unknown"),
+        input=request_data.get("messages", []),
+        metadata=request_data,
+    )
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        try:
+    try:
+        openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+        if not openrouter_api_key:
+            raise ValueError("Server configuration error: Missing OPENROUTER_API_KEY")
+
+        headers = {
+            "Authorization": f"Bearer {openrouter_api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": os.getenv("HTTP_REFERER", "http://localhost:8000"),
+            "X-Title": os.getenv("X_TITLE", "Graphiti Proxy Server")
+        }
+        if session_id:
+            headers["X-Session-Id"] = session_id
+
+        filtered_request = {k: v for k, v in request_data.items() if k != "response_format"}
+        print(f"Proxying request to OpenRouter: {json.dumps(filtered_request, indent=2)}")
+
+        output_content = ""
+        async with httpx.AsyncClient(timeout=60.0) as client:
             if filtered_request.get("stream", False):
-                # Handle streaming response
-                async with client.stream(
-                    "POST",
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json=filtered_request
-                ) as response:
+                async with client.stream("POST", "https://openrouter.ai/api/v1/chat/completions", headers=headers, json=filtered_request) as response:
                     if response.status_code != 200:
                         error_text = await response.aread()
-                        print(f"OpenRouter API Error: {response.status_code} - {error_text}")
-                        raise HTTPException(
-                            status_code=response.status_code,
-                            detail=f"OpenRouter API Error: {error_text.decode()}"
-                        )
+                        raise HTTPException(status_code=response.status_code, detail=f"OpenRouter API Error: {error_text.decode()}")
                     
-                    full_response = ""
                     async for chunk in response.aiter_lines():
                         if chunk:
-                            chunk_str = chunk.decode('utf-8')
-                            if chunk_str.startswith("data: "):
-                                data_part = chunk_str[6:]  # Remove "data: " prefix
+                            yield chunk + "\\n\\n"
+                            if chunk.startswith("data: "):
+                                data_part = chunk[6:]
                                 if data_part.strip() == "[DONE]":
-                                    yield "data: [DONE]\n\n"
                                     break
-                                else:
-                                    try:
-                                        chunk_data = json.loads(data_part)
-                                        if "choices" in chunk_data and chunk_data["choices"]:
-                                            delta = chunk_data["choices"][0].get("delta", {})
-                                            if "content" in delta:
-                                                full_response += delta["content"]
-                                        yield f"data: {data_part}\n\n"
-                                    except json.JSONDecodeError:
-                                        continue
-                    
-                    # Log the complete response to Langfuse
-                    langfuse.generation(
-                        name="openrouter_chat_completion_complete",
-                        model=filtered_request.get("model", "unknown"),
-                        input=filtered_request.get("messages", []),
-                        output=full_response,
-                        metadata={"session_id": session_id, "stream": True}
-                    )
+                                try:
+                                    chunk_data = json.loads(data_part)
+                                    if "choices" in chunk_data and chunk_data["choices"]:
+                                        delta = chunk_data["choices"][0].get("delta", {})
+                                        if "content" in delta and delta["content"] is not None:
+                                            output_content += delta["content"]
+                                except json.JSONDecodeError:
+                                    continue
+                generation.update(output=output_content)
             else:
-                # Handle non-streaming response
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json=filtered_request
-                )
-                
+                response = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=filtered_request)
                 if response.status_code != 200:
-                    print(f"OpenRouter API Error: {response.status_code} - {response.text}")
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=f"OpenRouter API Error: {response.text}"
-                    )
+                    raise HTTPException(status_code=response.status_code, detail=f"OpenRouter API Error: {response.text}")
                 
                 response_data = response.json()
-                print(f"OpenRouter API response: {json.dumps(response_data, indent=2)}")
-                
-                # Extract response content for logging
-                output_content = ""
                 if "choices" in response_data and response_data["choices"]:
                     message = response_data["choices"][0].get("message", {})
                     output_content = message.get("content", "")
                 
-                # Log to Langfuse
-                langfuse.generation(
-                    name="openrouter_chat_completion_complete",
-                    model=filtered_request.get("model", "unknown"),
-                    input=filtered_request.get("messages", []),
-                    output=output_content,
-                    usage=response_data.get("usage", {}),
-                    metadata={"session_id": session_id, "stream": False}
-                )
-                
+                generation.update(output=output_content, usage=response_data.get("usage"))
                 yield json.dumps(response_data)
-                
-        except httpx.RequestError as e:
-            print(f"Request error: {e}")
-            raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+    except Exception as e:
+        generation.update(level="ERROR", status_message=str(e))
+        print(f"Error in proxy_chat_completion: {e}")
+        # Re-raise as HTTPException to be handled by FastAPI
+        if isinstance(e, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=str(e))
 
 # @app.post("/chat/completions", dependencies=[Depends(get_api_key)])
 @app.post("/chat/completions")
